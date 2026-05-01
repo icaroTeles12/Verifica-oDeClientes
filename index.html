@@ -1,7 +1,183 @@
-echo "# Clientes" >> README.md 
-git init 
-git add README.md 
-git commit -m "primeiro commit" 
-git branch -M main 
-git remote add origin https://github.com/icaroTeles12/Clientes.git
- git push -u origin main
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel da Nagela | Gestão de Horários</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { background: #fff5f8; font-family: 'Montserrat', sans-serif; margin: 0; padding: 0; }
+        .admin-container { padding: 20px; max-width: 600px; margin: 0 auto; }
+        
+        /* Banner de Ativação de Áudio */
+        .audio-alert {
+            background: #ffc107;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            cursor: pointer;
+            border-bottom: 2px solid #e0a800;
+        }
+
+        /* Notificação Visual Interna */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #d63384;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            top: 30px;
+            transform: translateX(-50%);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        #toast.show {
+            visibility: visible;
+            animation: fadeInOut 4s;
+        }
+
+        @keyframes fadeInOut {
+            0% { top: 0; opacity: 0; }
+            10% { top: 30px; opacity: 1; }
+            90% { top: 30px; opacity: 1; }
+            100% { top: 0; opacity: 0; }
+        }
+
+        .card-agendamento {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 5px solid #d63384;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info h3 { margin: 0; color: #d63384; font-size: 1.1rem; }
+        .info p { margin: 5px 0; font-size: 0.9rem; color: #555; }
+        
+        .btn-concluir {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .status-vazio { text-align: center; color: #999; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+    <div id="avisoAudio" class="audio-alert" onclick="ativarAudio()">
+        🔔 CLIQUE AQUI PARA ATIVAR O SOM DE NOTIFICAÇÃO
+    </div>
+
+    <div id="toast">🚀 Novo Agendamento Recebido!</div>
+
+    <audio id="notificacaoSom">
+        <source src="musica.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="admin-container">
+        <h2 style="text-align: center; color: #d63384;">Agenda de Hoje</h2>
+        <div id="listaAgendamentos">
+            <p class="status-vazio">Carregando agendamentos...</p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyB_bCGUxDS6VorCoaLhVDEE-8BnGprMwGM",
+            authDomain: "studionagela-e3f49.firebaseapp.com",
+            databaseURL: "https://studionagela-e3f49-default-rtdb.firebaseio.com",
+            projectId: "studionagela-e3f49",
+            storageBucket: "studionagela-e3f49.firebasestorage.app",
+            messagingSenderId: "951540492656",
+            appId: "1:951540492656:web:a3920c50260728fcb647b5"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const listaDiv = document.getElementById('listaAgendamentos');
+        const som = document.getElementById('notificacaoSom');
+        const toast = document.getElementById('toast');
+        let carregamentoInicial = true;
+
+        // Ativa o áudio e remove o aviso
+        function ativarAudio() {
+            som.play().then(() => {
+                som.pause();
+                som.currentTime = 0;
+                document.getElementById('avisoAudio').style.display = 'none';
+            }).catch(e => console.log("Erro ao carregar musica.mp3"));
+        }
+
+        // Mostra aviso na tela e toca som
+        function alertarNovoAgendamento() {
+            // Tocar música
+            som.play().catch(e => console.log("Áudio bloqueado. Clique no botão amarelo."));
+            
+            // Mostrar banner rosa no topo
+            toast.className = "show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 4000);
+        }
+
+        // Monitorar novos agendamentos
+        db.ref('agendamentos').on('child_added', (snapshot) => {
+            if (!carregamentoInicial) {
+                alertarNovoAgendamento();
+            }
+        });
+
+        // Atualizar lista
+        db.ref('agendamentos').on('value', (snapshot) => {
+            listaDiv.innerHTML = "";
+            
+            if (!snapshot.exists()) {
+                listaDiv.innerHTML = '<p class="status-vazio">✨ Ninguém agendado por enquanto!</p>';
+                carregamentoInicial = false;
+                return;
+            }
+
+            snapshot.forEach((child) => {
+                const agendado = child.val();
+                const chave = child.key;
+                const card = `
+                    <div class="card-agendamento">
+                        <div class="info">
+                            <h3>${agendado.cliente}</h3>
+                            <p><strong>⏰ Hora:</strong> ${agendado.hora}</p>
+                            <p><strong>✂️ Serviços:</strong> ${agendado.servicos}</p>
+                            <p><strong>📅 Data:</strong> ${agendado.data}</p>
+                        </div>
+                        <button class="btn-concluir" onclick="finalizarServico('${chave}')">Livre</button>
+                    </div>
+                `;
+                listaDiv.innerHTML += card;
+            });
+
+            // Pequeno delay para garantir que a lista carregou antes de ativar o som para novos
+            setTimeout(() => { carregamentoInicial = false; }, 1000);
+        });
+
+        function finalizarServico(id) {
+            if (confirm("Deseja finalizar este serviço?")) {
+                db.ref('agendamentos').child(id).remove();
+            }
+        }
+    </script>
+</body>
+</html>
